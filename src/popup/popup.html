@@ -46,6 +46,11 @@
 
       <button id="open-history" type="button" class="secondary-action">打开词典历史</button>
       <button id="open-settings" type="button">服务商与首次设置</button>
+      <section class="update-panel" aria-label="版本更新">
+        <button id="check-update" type="button" class="secondary-action">检查新版</button>
+        <p id="update-status" role="status" aria-live="polite">点击检查可开启新版提醒。</p>
+        <a id="update-link" hidden target="_blank" rel="noopener noreferrer">查看新版与安装步骤</a>
+      </section>
       <p id="action-status" class="action-status" role="status" aria-live="polite"></p>
     </main>
     <script type="module" src="./main.ts"></script>

@@ -9,14 +9,14 @@ import {
   type TranslationContext,
   type TranslationPurpose
 } from '../core/translate/index.ts';
-import { DEFAULT_SETTINGS, type ExtensionSettings } from '../shared/settings.ts';
+import type { ExtensionSettings } from '../shared/settings.ts';
 import type {
   BackgroundFailure,
   BackgroundTranslationResult
 } from './translation-handler.ts';
 
 export interface BackgroundProviderFactory {
-  (settings: ExtensionSettings): TranslationProvider;
+  (settings: ExtensionSettings, signal?: AbortSignal): TranslationProvider;
 }
 
 export interface CoreTranslationRunnerOptions {
@@ -61,19 +61,14 @@ function isStringArray(value: unknown): value is string[] {
 }
 
 function providerCacheNamespace(settings: ExtensionSettings): string {
-  if (
-    settings.providerPreset === DEFAULT_SETTINGS.providerPreset &&
-    settings.baseURL === DEFAULT_SETTINGS.baseURL &&
-    settings.model === DEFAULT_SETTINGS.model &&
-    settings.useJsonOutputMode === DEFAULT_SETTINGS.useJsonOutputMode
-  ) {
-    return 'default';
-  }
+  // Older entries mixed both styles, so neither style may reuse that namespace.
   return JSON.stringify([
+    'style-v1',
     settings.providerPreset,
     settings.baseURL,
     settings.model,
-    settings.useJsonOutputMode
+    settings.useJsonOutputMode,
+    settings.translationStyle
   ]);
 }
 
@@ -84,7 +79,8 @@ export function createCoreBackgroundTranslationRunner(
     texts: string[],
     purpose: TranslationPurpose,
     settings: ExtensionSettings,
-    context?: TranslationContext
+    context?: TranslationContext,
+    signal?: AbortSignal
   ): Promise<BackgroundTranslationResult>;
   translateGlossaryCovered(
     texts: string[],
@@ -100,67 +96,60 @@ export function createCoreBackgroundTranslationRunner(
         translateGlossaryCoveredText(text, glossary, purpose)
       );
     },
-    async translate(texts, purpose, settings, context = 'comment') {
+    async translate(texts, purpose, settings, context = 'comment', signal) {
       const cacheNamespace = providerCacheNamespace(settings);
       const requestKey = JSON.stringify([cacheNamespace, context, purpose, texts]);
-      const existing = inFlight.get(requestKey);
+      const existing = signal === undefined ? inFlight.get(requestKey) : undefined;
       if (existing !== undefined) {
         return existing;
       }
 
       const operation = (async (): Promise<BackgroundTranslationResult> => {
       const observedFailures: ProviderError[] = [];
-      const provider = options.providerFactory(settings);
-      const fallbackProvider = settings.fallbackEnabled === true &&
+      const failedTexts = new Set<string>();
+      const provider = options.providerFactory(settings, signal);
+      const hasFallback = settings.fallbackEnabled === true &&
         settings.fallbackBaseURL !== undefined &&
         settings.fallbackBaseURL.trim().length > 0 &&
         settings.fallbackModel !== undefined &&
         settings.fallbackModel.trim().length > 0 &&
         settings.fallbackApiKey !== undefined &&
-        settings.fallbackApiKey.trim().length > 0
-        ? options.providerFactory({
-            ...settings,
-            providerPreset: 'custom',
-            baseURL: settings.fallbackBaseURL,
-            model: settings.fallbackModel,
-            apiKey: settings.fallbackApiKey,
-            fallbackEnabled: false
-          })
-        : undefined;
+        settings.fallbackApiKey.trim().length > 0;
       const observingProvider: TranslationProvider = {
         async translate(request): Promise<ProviderResult> {
+          if (signal?.aborted) return { ok: false, error: { code: 'transport-error', message: 'Cancelled.' } };
+          let primary: ProviderResult;
           try {
-            const result = await provider.translate(request);
-            if (result.ok || fallbackProvider === undefined) {
-              if (!result.ok) {
-                observedFailures.push(result.error);
-              }
-              return result;
-            }
-            const fallback = await fallbackProvider.translate(request);
-            if (!fallback.ok) {
-              observedFailures.push(fallback.error);
-            }
-            return fallback;
+            primary = await provider.translate(request);
           } catch {
-            if (fallbackProvider !== undefined) {
-              try {
-                const fallback = await fallbackProvider.translate(request);
-                if (fallback.ok) {
-                  return fallback;
-                }
-                observedFailures.push(fallback.error);
-                return fallback;
-              } catch {
-                // Report a generic failure below when both providers fail.
-              }
-            }
-            observedFailures.push({
-              code: 'transport-error',
-              message: 'The provider operation failed.'
-            });
-            throw new Error('The provider operation failed.');
+            primary = { ok: false, error: { code: 'transport-error', message: 'The provider operation failed.' } };
           }
+          if (primary.ok) return primary;
+          if (hasFallback && !signal?.aborted) {
+            try {
+              // Construct only after primary failure. Legacy invalid fallback
+              // settings must not prevent a healthy primary or a cache hit.
+              const fallbackProvider = options.providerFactory({
+                ...settings,
+                providerPreset: 'custom',
+                baseURL: settings.fallbackBaseURL!,
+                model: settings.fallbackModel!,
+                apiKey: settings.fallbackApiKey!,
+                fallbackEnabled: false
+              }, signal);
+              const fallback = await fallbackProvider.translate(request);
+              if (!fallback.ok) {
+                observedFailures.push(fallback.error);
+                request.texts.forEach((text) => failedTexts.add(text));
+              }
+              return fallback;
+            } catch {
+              // Keep the primary failure if fallback setup or transport fails.
+            }
+          }
+          observedFailures.push(primary.error);
+          request.texts.forEach((text) => failedTexts.add(text));
+          return primary;
         }
       };
 
@@ -200,7 +189,12 @@ export function createCoreBackgroundTranslationRunner(
       }
 
       const providerFailure = observedFailures[0];
+      if (signal?.aborted) return { ok: false, translations: [...texts], error: { code: 'cancelled', message: 'Lookup cancelled.' } };
       if (providerFailure !== undefined) {
+        const failedIndexes = texts.flatMap((text, index) => failedTexts.has(text) ? [index] : []);
+        if (failedIndexes.length < texts.length) {
+          return { ok: true, translations, warning: { ...mapProviderError(providerFailure), failedIndexes } };
+        }
         return {
           ok: false,
           translations: [...texts],
@@ -210,11 +204,11 @@ export function createCoreBackgroundTranslationRunner(
 
       return { ok: true, translations };
       })();
-      inFlight.set(requestKey, operation);
+      if (signal === undefined) inFlight.set(requestKey, operation);
       try {
         return await operation;
       } finally {
-        if (inFlight.get(requestKey) === operation) {
+        if (signal === undefined && inFlight.get(requestKey) === operation) {
           inFlight.delete(requestKey);
         }
       }

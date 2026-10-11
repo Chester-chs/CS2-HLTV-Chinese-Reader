@@ -24,8 +24,22 @@
         <button id="filter-favorites" class="filter" type="button" data-filter="favorites">收藏</button>
         <button id="review" class="quiet" type="button">开始复习</button>
         <button id="export" class="quiet" type="button">导出 CSV</button>
+        <button id="backup-export" class="quiet" type="button">备份阅读数据</button>
+        <button id="backup-open" class="quiet" type="button">恢复备份</button>
         <button id="clear" class="quiet danger" type="button">清空当前列表</button>
       </nav>
+      <section id="backup-panel" hidden class="backup-panel" aria-label="恢复阅读数据">
+        <h2>恢复阅读数据</h2>
+        <p>包含历史、收藏、复习进度与卡片外观，不包含 API Key 或服务商设置。</p>
+        <input id="backup-file" type="file" accept=".json,application/json" aria-label="选择备份文件" />
+        <p id="backup-preview" aria-live="polite">请选择插件导出的 JSON 备份文件。</p>
+        <label><input type="radio" name="backup-mode" value="merge" checked /> 合并：保留当前同名词条及其复习进度</label>
+        <label><input type="radio" name="backup-mode" value="replace" /> 替换：用备份覆盖当前阅读数据</label>
+        <p>两种方式都会恢复备份中的卡片外观。历史最多 50 条、收藏最多 100 条。</p>
+        <button id="backup-confirm" type="button" disabled>确认恢复</button>
+        <button id="backup-close" type="button" class="quiet">取消</button>
+      </section>
+      <p id="backup-status" role="status" aria-live="polite"></p>
 
       <section class="entries-panel">
         <ul id="entries" class="entries" aria-live="polite"></ul>

@@ -1,4 +1,5 @@
 import browser from 'webextension-polyfill';
+import { createReleaseChecker, UPDATE_ORIGIN, type ReleaseCheckResult } from '../shared/release-check.ts';
 import type { ExtensionSettingsStorage } from '../background/settings.ts';
 import type { DisplayMode } from '../shared/settings.ts';
 import {
@@ -158,3 +159,36 @@ historyButton.addEventListener('click', async () => {
 void loadPopupState(storage, permissions)
   .then(renderState)
   .catch(showReadError);
+
+const updateButton = document.querySelector<HTMLButtonElement>('#check-update')!;
+const updateStatus = document.querySelector<HTMLElement>('#update-status')!;
+const updateLink = document.querySelector<HTMLAnchorElement>('#update-link')!;
+const checker = createReleaseChecker({ storage,
+  hasPermission: () => browser.permissions.contains({ origins: [UPDATE_ORIGIN] }) });
+function renderUpdate(result: ReleaseCheckResult): void {
+  updateLink.hidden = true;
+  if (result.kind === 'permission-missing') {
+    updateStatus.textContent = '点击检查并允许访问 GitHub，即可开启每日新版提醒。';
+  } else if (result.kind === 'failed') {
+    updateStatus.textContent = '检查失败，请稍后重试。不会影响翻译功能。';
+  } else if (result.kind === 'available' && result.release !== undefined) {
+    updateStatus.textContent = `发现新版 v${result.release.version}。未打包扩展需手动更新。`;
+    updateLink.href = result.release.url;
+    updateLink.hidden = false;
+  } else {
+    updateStatus.textContent = `当前版本 v${browser.runtime.getManifest().version}，未发现更新版本。`;
+  }
+}
+updateButton.addEventListener('click', async () => {
+  if (updateButton.disabled) return;
+  updateButton.disabled = true;
+  updateStatus.textContent = '正在检查新版…';
+  try {
+    // Request directly inside the click gesture; the optional origin is not granted on startup.
+    const granted = await browser.permissions.request({ origins: [UPDATE_ORIGIN] });
+    if (!granted) renderUpdate({ kind: 'permission-missing' });
+    else renderUpdate(await checker.check(browser.runtime.getManifest().version, true));
+  } catch { renderUpdate({ kind: 'failed' }); }
+  finally { updateButton.disabled = false; }
+});
+void checker.check(browser.runtime.getManifest().version).then(renderUpdate);

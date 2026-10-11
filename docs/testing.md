@@ -14,7 +14,20 @@ Test files must use explicit `.ts` extensions when importing TypeScript modules,
 import { add } from './fixtures/add.ts';
 ```
 
-The repository's TypeScript 7.0.2 currently emits TS5097 for this spelling without `allowImportingTsExtensions`; the demonstration test contains a narrow, documented `@ts-expect-error TS5097` on that import. This keeps the required runtime spelling without adding the compiler option. Existing imports inside `src/` retain their established extensionless spelling and are not being normalized by this convention.
+`tsconfig.json` enables `allowImportingTsExtensions`, allowing the runtime-required spelling without suppression comments. Do not add `@ts-expect-error` or `@ts-ignore` to silence imports or other checks. Existing imports inside `src/` retain their established spelling and are not being batch-normalized.
+
+## v1.0.4 closeout regression coverage
+
+The owner authorized the final regression pass on 2026-10-11. New tests use injected storage, fetch and providers; none contact HLTV, GitHub or a real translation provider.
+
+- `closeout.test.ts`: mixed IndexedDB/session cache failures, retrying failed misses, model/style isolation, old-response cache generation, backup export without secrets, validated merge/replace and capacity reporting, unreviewed-state preservation, malformed warning indexes, and review intervals.
+- `cancellation.test.ts`: document-scoped cancellation, actual fetch AbortSignal, independent identical requests, preventing fallback after cancel, and late-response cache protection.
+- `update-check.test.ts`: origin permission before fetch, daily success/failure throttling, numeric version comparison and rejection of foreign release URLs.
+- `b3a.test.ts`: updated timeout contract and a real cache warm/hit path instead of a hard-coded obsolete namespace.
+
+Reverse validation deliberately reintroduces realistic regressions, checks that assertions fail, restores production source, and reruns the affected test file. Evidence is kept under ignored `raw-capture/closeout-mutation-evidence.txt`. No DOM test framework, skipped tests, new dependency or CI configuration is added.
+
+Unit tests and source review do not establish Chrome reload, rendered layout, system voice availability or real-provider success. Those require browser verification after manual extension reload; the blocked extension-management surface must not be bypassed.
 
 ## Provider permission browser verification
 

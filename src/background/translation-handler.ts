@@ -3,6 +3,8 @@ import { loadSettings } from './settings.ts';
 import {
   decodeTranslateRequest,
   encodeTranslateResponse,
+  isTranslationWarning,
+  type TranslationWarning,
   type TranslateFailureCode,
   type TranslateResponse,
   type TranslationContext,
@@ -16,7 +18,7 @@ export interface BackgroundFailure {
 }
 
 export type BackgroundTranslationResult =
-  | { ok: true; translations: string[] }
+  | { ok: true; translations: string[]; warning?: TranslationWarning }
   | { ok: false; translations: string[]; error: BackgroundFailure };
 
 export interface BackgroundTranslationRunner {
@@ -24,7 +26,8 @@ export interface BackgroundTranslationRunner {
     texts: string[],
     purpose: TranslationPurpose,
     settings: ExtensionSettings,
-    context?: TranslationContext
+    context?: TranslationContext,
+    signal?: AbortSignal
   ): Promise<BackgroundTranslationResult>;
   translateGlossaryCovered?(
     texts: string[],
@@ -46,6 +49,7 @@ export interface RuntimeMessageEvent {
 }
 
 export const DEFAULT_BACKGROUND_TIMEOUT_MS = 30000;
+export const FALLBACK_BACKGROUND_TIMEOUT_MS = 55000;
 
 class OperationTimeoutError extends Error {}
 
@@ -76,6 +80,7 @@ function isBackgroundFailureCode(value: unknown): value is BackgroundFailure['co
     value === 'settings-failure' ||
     value === 'provider-failure' ||
     value === 'provider-timeout' ||
+    value === 'cancelled' ||
     value === 'invalid-response'
   );
 }
@@ -91,7 +96,7 @@ function isBackgroundTranslationResult(
     return false;
   }
   if (value.ok) {
-    return true;
+    return value.warning === undefined || isTranslationWarning(value.warning, value.translations.length);
   }
   return (
     isRecord(value.error) &&
@@ -128,23 +133,23 @@ function createSuccess(
     requestId: string;
     purpose: TranslationPurpose;
   },
-  translations: string[]
+  translations: string[],
+  warning?: TranslationWarning
 ): TranslateResponse {
   return encodeTranslateResponse({
     type: 'hltv-zh-translate-response',
     requestId: request.requestId,
     purpose: request.purpose,
     ok: true,
-    translations
+    translations,
+    ...(warning === undefined ? {} : { warning })
   });
 }
 
 export function createBackgroundMessageHandler(
   options: BackgroundMessageHandlerOptions
-): (message: unknown) => Promise<TranslateResponse | undefined> {
-  const timeoutMs = options.timeoutMs ?? DEFAULT_BACKGROUND_TIMEOUT_MS;
-
-  return async (message) => {
+): (message: unknown, signal?: AbortSignal) => Promise<TranslateResponse | undefined> {
+  return async (message, signal) => {
     const request = decodeTranslateRequest(message);
     if (request === undefined) {
       return undefined;
@@ -193,6 +198,10 @@ export function createBackgroundMessageHandler(
     const mergedTranslations = request.texts.map(
       (text, index) => offlineTranslations[index] ?? text
     );
+    const partialFailure = (code: TranslateFailureCode, message: string): TranslateResponse =>
+      untranslatedIndexes.length < request.texts.length
+        ? createSuccess(request, mergedTranslations, { code, message, failedIndexes: untranslatedIndexes })
+        : createFailure(request, code, message);
     if (untranslatedIndexes.length === 0) {
       return createSuccess(request, mergedTranslations);
     }
@@ -205,14 +214,7 @@ export function createBackgroundMessageHandler(
         hasPermission = false;
       }
       if (!hasPermission) {
-        if (glossaryTranslations !== undefined && untranslatedIndexes.length < request.texts.length) {
-          return createSuccess(
-            request,
-            mergedTranslations
-          );
-        }
-        return createFailure(
-          request,
+        return partialFailure(
           'provider-failure',
           'The configured provider host permission is missing.'
         );
@@ -226,16 +228,14 @@ export function createBackgroundMessageHandler(
           untranslatedIndexes.map((index) => request.texts[index] as string),
           request.purpose,
           settings,
-          request.context ?? 'comment'
+          request.context ?? 'comment',
+          signal
         ),
-        timeoutMs
+        options.timeoutMs ?? (settings.fallbackEnabled === true
+          ? FALLBACK_BACKGROUND_TIMEOUT_MS : DEFAULT_BACKGROUND_TIMEOUT_MS)
       );
     } catch (error) {
-      if (untranslatedIndexes.length < request.texts.length) {
-        return createSuccess(request, mergedTranslations);
-      }
-      return createFailure(
-        request,
+      return partialFailure(
         error instanceof OperationTimeoutError
           ? 'provider-timeout'
           : 'provider-failure',
@@ -249,28 +249,23 @@ export function createBackgroundMessageHandler(
       !isBackgroundTranslationResult(result) ||
       result.translations.length !== untranslatedIndexes.length
     ) {
-      if (untranslatedIndexes.length < request.texts.length) {
-        return createSuccess(request, mergedTranslations);
-      }
-      return createFailure(
-        request,
+      return partialFailure(
         'invalid-response',
         'The background runner returned the wrong number or type of translations.'
       );
     }
 
     if (!result.ok) {
-      if (untranslatedIndexes.length < request.texts.length) {
-        return createSuccess(request, mergedTranslations);
-      }
-      return createFailure(request, result.error.code, result.error.message);
+      return partialFailure(result.error.code, result.error.message);
     }
 
     for (let index = 0; index < untranslatedIndexes.length; index += 1) {
       const requestIndex = untranslatedIndexes[index] as number;
       mergedTranslations[requestIndex] = result.translations[index] as string;
     }
-    return createSuccess(request, mergedTranslations);
+    return createSuccess(request, mergedTranslations, result.warning === undefined ? undefined : {
+      ...result.warning, failedIndexes: result.warning.failedIndexes.map((index) => untranslatedIndexes[index]!)
+    });
   };
 }
 

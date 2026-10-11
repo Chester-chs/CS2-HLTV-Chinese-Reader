@@ -68,6 +68,7 @@ export type SaveOptionsSettingsResult =
       ok: false;
       reason:
         | 'invalid-base-url'
+        | 'invalid-fallback'
         | 'permission-check-failed'
         | 'permission-denied'
         | 'settings-save-failed';
@@ -82,6 +83,13 @@ export async function saveOptionsSettings(
   const parsed = parseProviderBaseURL(settings.baseURL);
   if (parsed === undefined) {
     return { ok: false, reason: 'invalid-base-url' };
+  }
+  if (settings.fallbackEnabled === true && (
+    parseProviderBaseURL(settings.fallbackBaseURL ?? '') === undefined ||
+    (settings.fallbackModel ?? '').trim().length === 0 ||
+    (settings.fallbackApiKey ?? '').trim().length === 0
+  )) {
+    return { ok: false, reason: 'invalid-fallback' };
   }
 
   const details = { origins: [parsed.permissionPattern] };

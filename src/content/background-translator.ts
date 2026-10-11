@@ -8,6 +8,7 @@ import {
   encodeTranslateRequest,
   type TranslateRequest,
   type TranslateFailureCode,
+  type TranslateCancelRequest,
   type TranslationPurpose as ProtocolTranslationPurpose
 } from '../background/protocol.ts';
 
@@ -19,9 +20,12 @@ export interface BackgroundTranslationServiceOptions {
   sendMessage: ContentMessageSender;
   timeoutMs?: number;
   requestId?: () => string;
+  sendCancel?: (message: TranslateCancelRequest) => Promise<unknown>;
+  onIncomplete?: (texts: string[], code: TranslateFailureCode) => void;
 }
 
-export const DEFAULT_CONTENT_TIMEOUT_MS = 35000;
+// Covers both 25-second providers and the background's processing margin.
+export const DEFAULT_CONTENT_TIMEOUT_MS = 60000;
 
 export interface ContextualTranslationAdapter {
   translateWithContext(
@@ -34,13 +38,15 @@ export interface ContextualTranslationAdapter {
 export interface DetailedTranslationResult {
   translations: string[];
   errorCode?: TranslateFailureCode;
+  failedIndexes?: number[];
 }
 
 export interface DetailedContextualTranslationAdapter {
   translateWithContextDetailed(
     texts: string[],
     context: TranslationContext,
-    purpose: TranslationPurpose
+    purpose: TranslationPurpose,
+    options?: { signal?: AbortSignal }
   ): Promise<DetailedTranslationResult>;
 }
 
@@ -49,6 +55,7 @@ export interface RefreshableTranslationAdapter {
 }
 
 class ContentTranslationTimeoutError extends Error {}
+class ContentTranslationCancelledError extends Error {}
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -71,7 +78,8 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
 
 function defaultRequestIdFactory(): () => string {
   let nextId = 1;
-  return () => `content-request-${nextId++}`;
+  const sessionId = crypto.randomUUID();
+  return () => `${sessionId}-${nextId++}`;
 }
 
 export function createBackgroundTranslationService(
@@ -83,17 +91,21 @@ export function createBackgroundTranslationService(
   const timeoutMs = options.timeoutMs ?? DEFAULT_CONTENT_TIMEOUT_MS;
   const requestId = options.requestId ?? defaultRequestIdFactory();
   const sessionResults = new Map<string, string>();
+  let cacheGeneration = 0;
 
   async function translateBatchDetailed(
     texts: string[],
     purpose: ProtocolTranslationPurpose,
-    context: TranslationContext
+    context: TranslationContext,
+    lookupOptions?: { signal?: AbortSignal }
   ): Promise<DetailedTranslationResult> {
     if (texts.length === 0) {
       return { translations: [] };
     }
+    if (lookupOptions?.signal?.aborted) return { translations: [...texts], errorCode: 'cancelled' };
 
     const results = new Array<string>(texts.length);
+    const generation = cacheGeneration;
     const missing = new Map<string, number[]>();
     for (let index = 0; index < texts.length; index += 1) {
       const text = texts[index] as string;
@@ -118,14 +130,25 @@ export function createBackgroundTranslationService(
       requestId: requestId(),
       purpose,
       context,
+      ...(lookupOptions?.signal === undefined ? {} : { cancellable: true }),
       texts: missingEntries.map(([, indexes]) => texts[indexes[0] as number] as string)
     });
 
     let translated: string[] | undefined;
     let cacheable = false;
     let errorCode: TranslateFailureCode | undefined;
+    let failedRequestIndexes: number[] = [];
+    const signal = lookupOptions?.signal;
+    const cancelBackground = (): void => {
+      if (request.cancellable) void options.sendCancel?.({ type: 'hltv-zh-translate-cancel', requestId: request.requestId }).catch(() => {});
+    };
+    let onAbort: (() => void) | undefined;
     try {
-      const response = await withTimeout(options.sendMessage(request), timeoutMs);
+      const cancelled = new Promise<never>((_, reject) => {
+        onAbort = () => { cancelBackground(); reject(new ContentTranslationCancelledError()); };
+        signal?.addEventListener('abort', onAbort, { once: true });
+      });
+      const response = await withTimeout(Promise.race([options.sendMessage(request), cancelled]), timeoutMs);
       if (response === undefined) {
         errorCode = 'provider-timeout';
       } else {
@@ -139,6 +162,10 @@ export function createBackgroundTranslationService(
           if (decoded.ok) {
             translated = decoded.translations;
             cacheable = true;
+            if (decoded.warning !== undefined) {
+              errorCode = decoded.warning.code;
+              failedRequestIndexes = decoded.warning.failedIndexes;
+            }
           } else {
             translated = [...request.texts];
             errorCode = decoded.error.code;
@@ -148,16 +175,23 @@ export function createBackgroundTranslationService(
         }
       }
     } catch (error) {
-      errorCode = error instanceof ContentTranslationTimeoutError
+      errorCode = error instanceof ContentTranslationCancelledError ? 'cancelled' : error instanceof ContentTranslationTimeoutError
         ? 'provider-timeout'
         : 'provider-failure';
+      cancelBackground();
+    } finally {
+      if (onAbort !== undefined) signal?.removeEventListener('abort', onAbort);
     }
 
     const resolved = translated ?? request.texts;
+    if (!cacheable) failedRequestIndexes = missingEntries.map((_, index) => index);
+    if (failedRequestIndexes.length > 0 && purpose !== 'dictionary' && purpose !== 'sentence' && errorCode !== 'cancelled') {
+      options.onIncomplete?.(failedRequestIndexes.map((index) => request.texts[index]!), errorCode!);
+    }
     for (let index = 0; index < missingEntries.length; index += 1) {
       const [sessionKey, indexes] = missingEntries[index] as [string, number[]];
       const value = resolved[index] as string;
-      if (cacheable) {
+      if (cacheable && generation === cacheGeneration && !failedRequestIndexes.includes(index)) {
         sessionResults.set(sessionKey, value);
       }
       for (const originalIndex of indexes) {
@@ -167,7 +201,10 @@ export function createBackgroundTranslationService(
 
     return {
       translations: results,
-      ...(errorCode === undefined ? {} : { errorCode })
+      ...(errorCode === undefined ? {} : { errorCode }),
+      ...(failedRequestIndexes.length === 0 ? {} : {
+        failedIndexes: failedRequestIndexes.flatMap((index) => missingEntries[index]![1])
+      })
     };
   }
 
@@ -189,10 +226,11 @@ export function createBackgroundTranslationService(
     translateWithContext(texts, context, purpose) {
       return translateBatch(texts, purpose, context);
     },
-    translateWithContextDetailed(texts, context, purpose) {
-      return translateBatchDetailed(texts, purpose, context);
+    translateWithContextDetailed(texts, context, purpose, lookupOptions) {
+      return translateBatchDetailed(texts, purpose, context, lookupOptions);
     },
     clearSessionCache() {
+      cacheGeneration += 1;
       sessionResults.clear();
     }
   };

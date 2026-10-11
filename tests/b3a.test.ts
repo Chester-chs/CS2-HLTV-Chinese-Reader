@@ -176,7 +176,7 @@ test('background glossary loader consumes injected packaged text at runtime', as
 
 test('translation defaults allow page requests more time than the old five-second cutoff', async () => {
   assert.equal(DEFAULT_BACKGROUND_TIMEOUT_MS, 30000);
-  assert.equal(DEFAULT_CONTENT_TIMEOUT_MS, 35000);
+  assert.equal(DEFAULT_CONTENT_TIMEOUT_MS, 60000);
   let providerTimeout = 0;
   const factory = createBackgroundProviderFactory({
     transport: {
@@ -1120,18 +1120,19 @@ test('background cache hit still receives one message but does not call the prov
   const original = 'A long English sentence for a cached translation';
   const cached = '已缓存的译文';
   let providerCalls = 0;
+  const saved = new Map<string, string>();
   const cache = {
     async get(key: string) {
-      return key === `v2:plain:${hashText(original)}` ? cached : undefined;
+      return saved.get(key);
     },
-    async set() {
-      // The cache-hit path must not write.
+    async set(key: string, value: string) {
+      saved.set(key, value);
     }
   };
   const providerFactory = (): TranslationProvider => ({
     async translate() {
       providerCalls += 1;
-      return { ok: true, translations: ['unexpected'] };
+      return { ok: true, translations: [cached] };
     }
   });
   const runner = createCoreBackgroundTranslationRunner({
@@ -1140,6 +1141,8 @@ test('background cache hit still receives one message but does not call the prov
     providerFactory
   });
 
+  await runner.translate([original], 'plain', DEFAULT_SETTINGS);
+  providerCalls = 0;
   const result = await runner.translate(
     [original],
     'plain',

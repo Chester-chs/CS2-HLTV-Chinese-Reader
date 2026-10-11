@@ -228,3 +228,7 @@ button:disabled {
   color: GrayText;
   font-size: 12px;
 }
+.update-panel { border-top: 1px solid color-mix(in srgb, CanvasText 12%, transparent); margin-top: 14px; }
+.update-panel p { font-size: 12px; line-height: 1.6; color: GrayText; margin: 7px 0; }
+.update-panel a { font-size: 12px; color: Highlight; }
+.update-panel a[hidden] { display: none; }

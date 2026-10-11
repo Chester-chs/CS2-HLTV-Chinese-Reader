@@ -209,3 +209,10 @@ button:focus-visible {
     margin-left: 0;
   }
 }
+/* Backup preview stays separate from the dictionary list and review controls. */
+.backup-panel { padding: 24px; margin: 20px 0; border: 1px solid #d1d5db; border-radius: 18px; background: #fff; color: #202124; }
+.backup-panel[hidden] { display: none; }
+.backup-panel h2 { margin-top: 0; font-size: 20px; }
+.backup-panel label { display: block; margin: 12px 0; }
+.backup-panel p { line-height: 1.7; overflow-wrap: anywhere; }
+#backup-status { line-height: 1.6; color: #425466; }

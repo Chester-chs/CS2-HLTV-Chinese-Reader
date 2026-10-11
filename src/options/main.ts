@@ -280,6 +280,8 @@ document.querySelector<HTMLFormElement>('#settings-form')!.addEventListener(
 
     if (result.reason === 'permission-denied' && result.origin !== undefined) {
       statusLine.textContent = missingPermissionText(result.origin);
+    } else if (result.reason === 'invalid-fallback') {
+      statusLine.textContent = '备用服务未保存：请填写有效的 HTTPS 或回环 HTTP baseURL、模型名和 API Key，或关闭备用服务。';
     } else if (result.reason === 'invalid-base-url') {
       statusLine.textContent = isEnglishUi() ? 'Enter a valid HTTPS or loopback HTTP baseURL.' : '请填写有效的 HTTPS 或回环 HTTP baseURL。';
     } else {

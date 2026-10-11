@@ -1,5 +1,6 @@
 import { createDictionaryStore, type DictionaryStorage } from '../content/dictionary-store.ts';
 import { decodeDictionaryRequest, type DictionaryResponse } from '../shared/dictionary-messages.ts';
+import { createReadingBackup, planReadingRestore, READING_KEYS } from '../shared/reading-backup.ts';
 
 export function createDictionaryMessageHandler(storage: DictionaryStorage):
   (message: unknown) => Promise<DictionaryResponse> {
@@ -13,6 +14,15 @@ export function createDictionaryMessageHandler(storage: DictionaryStorage):
     const operation = queue.then(async (): Promise<DictionaryResponse> => {
       try {
         switch (request.action) {
+          case 'export-backup':
+            return { ok: true, value: createReadingBackup(await storage.get(READING_KEYS)) };
+          case 'import-backup': {
+            if (request.backup === undefined || request.importMode === undefined) throw new Error('Missing backup');
+            const current = request.importMode === 'replace' ? request.backup : createReadingBackup(await storage.get(READING_KEYS));
+            const plan = planReadingRestore(current, request.backup, request.importMode);
+            await storage.set(plan.values);
+            return { ok: true, value: plan.report };
+          }
           case 'record-history':
             if (request.entry === undefined) throw new Error('Missing entry');
             await store.recordHistory(request.entry);
@@ -20,6 +30,10 @@ export function createDictionaryMessageHandler(storage: DictionaryStorage):
           case 'toggle-favorite':
             if (request.entry === undefined) throw new Error('Missing entry');
             return { ok: true, value: await store.toggleFavorite(request.entry) };
+          case 'set-favorite':
+            if (request.entry === undefined || request.favorite === undefined) throw new Error('Missing favorite');
+            return { ok: true, value: await store.setFavorite(request.entry, request.favorite) };
+          case 'list-review': return { ok: true, value: await store.listReview() };
           case 'is-favorite': return { ok: true, value: await store.isFavorite(request.query ?? '') };
           case 'list-history': return { ok: true, value: await store.listHistory() };
           case 'list-favorites': return { ok: true, value: await store.listFavorites() };

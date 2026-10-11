@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CS2 HLTV Chinese Reader",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Read HLTV in Chinese with configurable translation and bilingual display.",
   "icons": {
     "16": "icons/icon-16.png",

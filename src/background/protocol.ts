@@ -4,13 +4,29 @@ export type { TranslationContext, TranslationPurpose };
 
 export const TRANSLATE_REQUEST_TYPE = 'hltv-zh-translate-request' as const;
 export const TRANSLATE_RESPONSE_TYPE = 'hltv-zh-translate-response' as const;
+export const TRANSLATE_CANCEL_TYPE = 'hltv-zh-translate-cancel' as const;
+export interface TranslateCancelRequest { type: typeof TRANSLATE_CANCEL_TYPE; requestId: string }
 
 export type TranslateFailureCode =
   | 'disabled'
   | 'settings-failure'
   | 'provider-failure'
   | 'provider-timeout'
+  | 'cancelled'
   | 'invalid-response';
+
+export interface TranslationWarning {
+  code: TranslateFailureCode;
+  message: string;
+  failedIndexes: number[];
+}
+
+export function isTranslationWarning(value: unknown, length: number): value is TranslationWarning {
+  return isRecord(value) && isFailureCode(value.code) && typeof value.message === 'string' &&
+    Array.isArray(value.failedIndexes) && value.failedIndexes.length > 0 &&
+    value.failedIndexes.every((index) => Number.isInteger(index) && index >= 0 && index < length) &&
+    new Set(value.failedIndexes).size === value.failedIndexes.length;
+}
 
 export interface TranslateRequest {
   type: typeof TRANSLATE_REQUEST_TYPE;
@@ -18,6 +34,7 @@ export interface TranslateRequest {
   purpose: TranslationPurpose;
   context?: TranslationContext;
   texts: string[];
+  cancellable?: boolean;
 }
 
 export interface TranslateSuccessResponse {
@@ -26,6 +43,7 @@ export interface TranslateSuccessResponse {
   purpose: TranslationPurpose;
   ok: true;
   translations: string[];
+  warning?: TranslationWarning;
 }
 
 export interface TranslateFailureResponse {
@@ -67,6 +85,7 @@ function isFailureCode(value: unknown): value is TranslateFailureCode {
     value === 'settings-failure' ||
     value === 'provider-failure' ||
     value === 'provider-timeout' ||
+    value === 'cancelled' ||
     value === 'invalid-response'
   );
 }
@@ -79,7 +98,8 @@ export function encodeTranslateRequest(
     requestId: request.requestId,
     purpose: request.purpose,
     ...(request.context === undefined ? {} : { context: request.context }),
-    texts: [...request.texts]
+    texts: [...request.texts],
+    ...(request.cancellable === true ? { cancellable: true } : {})
   };
 }
 
@@ -95,6 +115,7 @@ export function decodeTranslateRequest(
     typeof value.requestId !== 'string' ||
     value.requestId.length === 0 ||
     !isPurpose(value.purpose) ||
+    (value.cancellable !== undefined && typeof value.cancellable !== 'boolean') ||
     (value.context !== undefined && !isTranslationContext(value.context)) ||
     !isStringArray(value.texts)
   ) {
@@ -108,7 +129,8 @@ export function decodeTranslateRequest(
     ...(value.context === undefined
       ? {}
       : { context: value.context as TranslationContext }),
-    texts: [...value.texts]
+    texts: [...value.texts],
+    ...(value.cancellable === true ? { cancellable: true } : {})
   };
 }
 
@@ -121,7 +143,8 @@ export function encodeTranslateResponse(
       requestId: response.requestId,
       purpose: response.purpose,
       ok: true,
-      translations: [...response.translations]
+      translations: [...response.translations],
+      ...(response.warning === undefined ? {} : { warning: { ...response.warning, failedIndexes: [...response.warning.failedIndexes] } })
     };
   }
 
@@ -156,12 +179,14 @@ export function decodeTranslateResponse(
   }
 
   if (value.ok === true) {
+    if (value.warning !== undefined && !isTranslationWarning(value.warning, value.translations.length)) return undefined;
     return {
       type: TRANSLATE_RESPONSE_TYPE,
       requestId: value.requestId,
       purpose: value.purpose,
       ok: true,
-      translations: [...value.translations]
+      translations: [...value.translations],
+      ...(value.warning === undefined ? {} : { warning: value.warning as TranslationWarning })
     };
   }
 

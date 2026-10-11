@@ -8,7 +8,7 @@ import { applyContentSettingsChanges } from './content/settings-sync.ts';
 import type { TranslateRequest } from './background/protocol.ts';
 import type { ContentSettingsStorage } from './content/settings.ts';
 import { installSelectionMagnifier } from './content/selection-translation.ts';
-import type { DictionaryStorage } from './content/dictionary-store.ts';
+import { DICTIONARY_FAVORITES_KEY, type DictionaryStorage } from './content/dictionary-store.ts';
 import { createDictionaryClient } from './content/dictionary-client.ts';
 
 browser.runtime.getManifest();
@@ -22,6 +22,10 @@ async function startContentScript(): Promise<void> {
   const translator = createBackgroundTranslationService({
     sendMessage(message: TranslateRequest) {
       return browser.runtime.sendMessage(message) as Promise<unknown>;
+    },
+    sendCancel: (message) => browser.runtime.sendMessage(message),
+    onIncomplete(texts) {
+      showIncompleteNotice(texts.length);
     }
   });
   const dictionaryStore = createDictionaryClient((message) => browser.runtime.sendMessage(message));
@@ -65,6 +69,7 @@ async function startContentScript(): Promise<void> {
     if (areaName !== 'local') {
       return;
     }
+    if (Object.hasOwn(changes, DICTIONARY_FAVORITES_KEY)) magnifier?.refreshFavorites();
     if (magnifier !== undefined && (Object.hasOwn(changes, 'theme') || Object.hasOwn(changes, 'cardColor') || Object.hasOwn(changes, 'fontScale'))) {
       const theme = changes.theme?.newValue;
       const fontScale = changes.fontScale?.newValue;
@@ -105,3 +110,22 @@ async function startContentScript(): Promise<void> {
 }
 
 void startContentScript();
+
+let incompleteNotice: HTMLElement | undefined;
+let incompleteTimer: ReturnType<typeof setTimeout> | undefined;
+function showIncompleteNotice(count: number): void {
+  if (document.body === null) return;
+  if (incompleteNotice === undefined) {
+    incompleteNotice = document.createElement('div');
+    incompleteNotice.setAttribute('role', 'status');
+    incompleteNotice.setAttribute('data-hltv-zh-selection-ui', '1');
+    Object.assign(incompleteNotice.style, { position: 'fixed', bottom: '16px', left: '16px', zIndex: '2147483646',
+      padding: '12px 16px', borderRadius: '14px', background: '#202124', color: '#ffffff', maxWidth: 'min(360px, calc(100vw - 32px))',
+      font: '14px/1.6 system-ui, sans-serif', boxShadow: '0 6px 24px rgba(0,0,0,.2)' });
+    document.body.appendChild(incompleteNotice);
+  }
+  incompleteNotice.textContent = `部分内容未完成翻译（本批 ${count} 项），已保留可用译文。请检查网络与服务设置后刷新页面。`;
+  incompleteNotice.hidden = false;
+  if (incompleteTimer !== undefined) clearTimeout(incompleteTimer);
+  incompleteTimer = setTimeout(() => { if (incompleteNotice !== undefined) incompleteNotice.hidden = true; }, 8000);
+}

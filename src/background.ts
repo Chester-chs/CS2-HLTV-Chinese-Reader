@@ -11,7 +11,8 @@ import { createProviderPermissionMonitor } from './background/provider-permissio
 import { createBackgroundProviderFactory } from './background/provider.ts';
 import { createDictionaryMessageHandler } from './background/dictionary-handler.ts';
 import { DICTIONARY_MESSAGE_TYPE } from './shared/dictionary-messages.ts';
-import { TRANSLATE_REQUEST_TYPE } from './background/protocol.ts';
+import { TRANSLATE_REQUEST_TYPE, TRANSLATE_CANCEL_TYPE } from './background/protocol.ts';
+import { createCancellableTranslationHandler } from './background/cancellation.ts';
 import type { DictionaryStorage } from './content/dictionary-store.ts';
 
 const { version } = browser.runtime.getManifest();
@@ -64,10 +65,14 @@ const messageHandler = createBackgroundMessageHandler({
 });
 
 const dictionaryHandler = createDictionaryMessageHandler(browser.storage.local as unknown as DictionaryStorage);
+const cancellableHandler = createCancellableTranslationHandler(messageHandler);
 browser.runtime.onMessage.addListener((message: unknown, sender: Runtime.MessageSender) => {
   if (sender.id !== browser.runtime.id || typeof message !== 'object' || message === null) return undefined;
   const type = (message as Record<string, unknown>).type;
   if (type === DICTIONARY_MESSAGE_TYPE) return dictionaryHandler(message);
-  if (type === TRANSLATE_REQUEST_TYPE) return messageHandler(message);
+  if (type === TRANSLATE_REQUEST_TYPE || type === TRANSLATE_CANCEL_TYPE) {
+    const scope = JSON.stringify([sender.tab?.id ?? 'extension', sender.frameId ?? 0, sender.url ?? '']);
+    return cancellableHandler(message, scope);
+  }
   return undefined;
 });

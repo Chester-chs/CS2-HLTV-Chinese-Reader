@@ -1,6 +1,6 @@
 {
   "name": "cs2-chinese-match-reader",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "type": "module",
   "description": "Chinese reading support for HLTV pages.",
   "main": "index.js",

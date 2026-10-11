@@ -100,6 +100,25 @@ const PART_OF_SPEECH_LABELS = new Map<string, string>([
   ['adv', 'adv.'],
   ['adverb', 'adv.'],
   ['副词', 'adv.'],
+  ['det', 'det.'],
+  ['determiner', 'det.'],
+  ['限定词', 'det.'],
+  ['限定符', 'det.'],
+  ['aux', 'aux.'],
+  ['auxiliary', 'aux.'],
+  ['auxiliary verb', 'aux.'],
+  ['助动词', 'aux.'],
+  ['modal verb', 'modal v.'],
+  ['modal v', 'modal v.'],
+  ['情态动词', 'modal v.'],
+  ['num', 'num.'],
+  ['number', 'num.'],
+  ['numeral', 'num.'],
+  ['数词', 'num.'],
+  ['art', 'art.'],
+  ['article', 'art.'],
+  ['冠词', 'art.'],
+  ['intj', 'int.'],
   ['prep', 'prep.'],
   ['preposition', 'prep.'],
   ['介词', 'prep.'],
@@ -651,10 +670,17 @@ const appearanceWrites = new WeakMap<Document, {
 const selectionCardBindings = new WeakMap<HTMLElement, {
   input: HTMLInputElement;
   refreshAppearance(): void;
+  refreshFavorite(): void;
   dispose(): void;
 }>();
 
+const activeLookups = new WeakMap<Document, { controller: AbortController; card: HTMLElement }>();
 function removeSelectionPopover(popover: HTMLElement): void {
+  const lookup = activeLookups.get(popover.ownerDocument);
+  if (lookup?.card === popover) {
+    lookup.controller.abort();
+    activeLookups.delete(popover.ownerDocument);
+  }
   selectionCardBindings.get(popover)?.dispose();
   selectionCardBindings.delete(popover);
   selectionCardObservers.get(popover)?.disconnect();
@@ -684,6 +710,8 @@ export function selectionFailureMessage(
   errorCode: TranslateFailureCode | undefined
 ): string | undefined {
   switch (errorCode) {
+    case 'cancelled':
+      return '查询已取消，可修改输入后重新查询。';
     case 'disabled':
       return '插件翻译已关闭，请先打开插件。';
     case 'settings-failure':
@@ -710,12 +738,13 @@ function showSelectionTranslation(
   dictionaryStore?: {
     recordHistory(entry: DictionaryEntry): Promise<void>;
     isFavorite(query: string): Promise<boolean>;
-    toggleFavorite(entry: DictionaryEntry): Promise<boolean>;
+    setFavorite(entry: DictionaryEntry, favorite: boolean): Promise<boolean>;
   },
   appearance: SelectionCardAppearance = { theme: 'system', cardColor: 'neutral', fontScale: 1 },
   appearanceStore?: { set(values: Record<string, unknown>): Promise<void> },
   learning: SelectionLearningOptions = {},
-  existingPopover?: HTMLElement
+  existingPopover?: HTMLElement,
+  pending = false
 ): void {
   const body = document.body;
   if (body === null) {
@@ -1036,9 +1065,11 @@ function showSelectionTranslation(
     if (appearance.theme === 'system') refreshAppearance();
   };
   colorScheme?.addEventListener('change', onSystemAppearanceChange);
+  let refreshFavorite: (() => void) | undefined;
   selectionCardBindings.set(popover, {
     input: title,
     refreshAppearance,
+    refreshFavorite: () => refreshFavorite?.(),
     dispose: () => {
       colorScheme?.removeEventListener('change', onSystemAppearanceChange);
       stopSelectionSpeech(document);
@@ -1099,12 +1130,31 @@ function showSelectionTranslation(
       }
     };
     let favoriteRevision = 0;
-    void dictionaryStore.isFavorite(original).then((value) => {
-      if (favoriteRevision === 0) updateFavorite(value);
-    }).catch(() => showCardNotice('收藏状态读取失败，请重试。'));
+    let currentFavorite = false;
+    let favoriteLoaded = false;
+    let savingFavorite = false;
+    refreshFavorite = () => {
+      if (savingFavorite || favoriteButton === undefined) return;
+      const revision = ++favoriteRevision;
+      favoriteButton.disabled = true;
+      void dictionaryStore.isFavorite(original).then((value) => {
+        if (revision !== favoriteRevision || !header.isConnected) return;
+        favoriteLoaded = true;
+        currentFavorite = value;
+        updateFavorite(value);
+      }).catch(() => {
+        if (revision === favoriteRevision) showCardNotice('收藏状态读取失败，请重新查询后重试。');
+      }).finally(() => {
+        if (favoriteButton !== undefined && revision === favoriteRevision) {
+          favoriteButton.disabled = !favoriteLoaded || popover.getAttribute('aria-busy') === 'true';
+        }
+      });
+    };
+    refreshFavorite();
     favoriteButton.addEventListener('click', () => {
       if (favoriteButton === undefined || favoriteButton.disabled) return;
       favoriteButton.disabled = true;
+      savingFavorite = true;
       favoriteRevision += 1;
       const data = parseDictionaryTranslation(translated);
       const parsedBaseForm = data.baseForm ?? inferRegularPastBaseForm(original, data.definitions);
@@ -1121,13 +1171,16 @@ function showSelectionTranslation(
         ...(data.examples === undefined ? {} : { examples: data.examples }),
         savedAt: Date.now()
       };
-      void dictionaryStore.toggleFavorite(entry).then((value) => {
+      void dictionaryStore.setFavorite(entry, !currentFavorite).then((value) => {
+        currentFavorite = value;
         updateFavorite(value);
         showCardNotice(value ? '已收藏。' : '已取消收藏。');
       }).catch(() => showCardNotice('收藏保存失败，请重试。')).finally(() => {
+        savingFavorite = false;
         if (favoriteButton !== undefined) {
           favoriteButton.disabled = popover.getAttribute('aria-busy') === 'true';
         }
+        if (header.isConnected) refreshFavorite?.();
       });
     });
   }
@@ -1214,18 +1267,24 @@ function showSelectionTranslation(
 
   const failure = selectionFailureMessage(errorCode);
   const fallback = translated === original ? '未找到中文释义，请检查翻译服务设置。' : translated;
-  if (failure !== undefined || translated === original) {
+  if (pending || failure !== undefined || translated === original) {
     const result = document.createElement('div');
-    result.textContent = failure ?? fallback;
+    result.textContent = pending ? `正在查询「${original}」…` : failure ?? fallback;
     setStyles(result, {
-      color: '#b35c00',
+      color: 'var(--hltv-zh-card-text)',
       fontSize: 'calc(16px * var(--hltv-zh-scale))',
       lineHeight: '1.6',
       wordBreak: 'break-word',
       whiteSpace: 'pre-wrap'
     });
     popover.append(header, divider, result);
-    if (purpose === 'dictionary') {
+    if (!pending) {
+      const retry = createCompactControl('重试', '重试查询');
+      setStyles(retry, { width: 'auto', padding: '8px 16px', marginTop: '12px', color: 'var(--hltv-zh-card-text)' });
+      retry.addEventListener('click', submitSearch);
+      popover.appendChild(retry);
+    }
+    if (!pending && purpose === 'dictionary') {
       popover.appendChild(createOxfordVerificationLinks(document, original, false));
     }
     if (!reuseCard) {
@@ -1476,7 +1535,8 @@ async function lookupSelection(
     translateWithContextDetailed?: (
       texts: string[],
       context: 'prose' | 'structured' | 'comment',
-      purpose: TranslationPurpose
+      purpose: TranslationPurpose,
+      options?: { signal?: AbortSignal }
     ) => Promise<DetailedTranslationResult>;
   },
   text: string,
@@ -1484,7 +1544,7 @@ async function lookupSelection(
   dictionaryStore?: {
     recordHistory(entry: DictionaryEntry): Promise<void>;
     isFavorite(query: string): Promise<boolean>;
-    toggleFavorite(entry: DictionaryEntry): Promise<boolean>;
+    setFavorite(entry: DictionaryEntry, favorite: boolean): Promise<boolean>;
   },
   appearance: SelectionCardAppearance = { theme: 'system', cardColor: 'neutral', fontScale: 1 },
   appearanceStore?: { set(values: Record<string, unknown>): Promise<void> },
@@ -1496,8 +1556,33 @@ async function lookupSelection(
   }
   const version = (selectionLookupVersions.get(document) ?? 0) + 1;
   selectionLookupVersions.set(document, version);
+  activeLookups.get(document)?.controller.abort();
+  const controller = new AbortController();
   const purpose = classifySelectionPurpose(text);
   const context = purpose === 'dictionary' ? 'structured' : 'prose';
+  const onSearch = (nextText: string, card: HTMLElement): void => {
+    void lookupSelection(document, translator, nextText, anchorRect, dictionaryStore, appearance, appearanceStore, learning, card);
+  };
+  if (existingPopover?.isConnected !== true) {
+    showSelectionTranslation(document, text, text, undefined, anchorRect, onSearch, purpose,
+      dictionaryStore, appearance, appearanceStore, learning, undefined, true);
+    existingPopover = activeSelectionCards.get(document);
+  }
+  if (existingPopover === undefined) return;
+  const card = existingPopover;
+  const previous = activeLookups.get(document);
+  previous?.card.removeAttribute('aria-busy');
+  const progress = document.createElement('div');
+  setStyles(progress, { display: 'flex', alignItems: 'center', gap: '12px', marginTop: '12px', color: 'var(--hltv-zh-card-text)' });
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.textContent = '取消查询';
+  setStyles(cancel, { border: '1px solid currentColor', borderRadius: '12px', padding: '6px 12px', background: 'transparent', color: 'inherit', cursor: 'pointer', fontSize: 'calc(14px * var(--hltv-zh-scale))' });
+  cancel.addEventListener('click', () => { cancel.disabled = true; controller.abort(); });
+  progress.appendChild(cancel);
+  card.appendChild(progress);
+  card.setAttribute('aria-busy', 'true');
+  activeLookups.set(document, { controller, card });
   let result: DetailedTranslationResult;
   try {
     result = translator.translateWithContextDetailed === undefined
@@ -1511,11 +1596,15 @@ async function lookupSelection(
       : await translator.translateWithContextDetailed(
           [text],
           context,
-          purpose
+          purpose,
+          { signal: controller.signal }
         );
   } catch {
     result = { translations: [text], errorCode: 'provider-failure' };
   }
+  progress.remove();
+  if (activeLookups.get(document)?.controller === controller) activeLookups.delete(document);
+  if (controller.signal.aborted) result = { translations: [text], errorCode: 'cancelled' };
   // Ignore superseded responses and never reopen a card closed during a request.
   if (selectionLookupVersions.get(document) !== version ||
       (existingPopover !== undefined && !existingPopover.isConnected)) {
@@ -1527,7 +1616,7 @@ async function lookupSelection(
     result.translations[0] ?? text,
     result.errorCode,
     anchorRect,
-    (nextText, card) => void lookupSelection(document, translator, nextText, anchorRect, dictionaryStore, appearance, appearanceStore, learning, card),
+    onSearch,
     purpose,
     dictionaryStore,
     appearance,
@@ -1540,6 +1629,7 @@ async function lookupSelection(
 export interface SelectionMagnifierController {
   setAppearance(appearance: SelectionCardAppearance): void;
   setLearningOptions(options: SelectionLearningOptions): void;
+  refreshFavorites(): void;
 }
 
 export function installSelectionMagnifier(options: {
@@ -1548,13 +1638,14 @@ export function installSelectionMagnifier(options: {
     translateWithContextDetailed?: (
       texts: string[],
       context: 'prose' | 'structured' | 'comment',
-      purpose: TranslationPurpose
+      purpose: TranslationPurpose,
+      options?: { signal?: AbortSignal }
     ) => Promise<DetailedTranslationResult>;
   };
   dictionaryStore?: {
     recordHistory(entry: DictionaryEntry): Promise<void>;
     isFavorite(query: string): Promise<boolean>;
-    toggleFavorite(entry: DictionaryEntry): Promise<boolean>;
+    setFavorite(entry: DictionaryEntry, favorite: boolean): Promise<boolean>;
   };
   appearance?: SelectionCardAppearance;
   appearanceStore?: { set(values: Record<string, unknown>): Promise<void> };
@@ -1638,12 +1729,24 @@ export function installSelectionMagnifier(options: {
   document.addEventListener('selectionchange', scheduleUpdate, true);
   document.addEventListener('mouseup', scheduleUpdate, true);
   document.addEventListener('keyup', scheduleUpdate, true);
+  const dismissOnViewportChange = (): void => {
+    if (updateTimer !== undefined) view.clearTimeout(updateTimer);
+    updateTimer = undefined;
+    removeButton();
+  };
+  // A fixed button cannot retain a stale viewport anchor after scrolling.
+  document.addEventListener('scroll', dismissOnViewportChange, true);
+  view.addEventListener('resize', dismissOnViewportChange);
   document.addEventListener('mousedown', (event) => {
     if (!isSelectionUiNode(event.target as Node | null)) {
       removeButton();
     }
   }, true);
   return {
+    refreshFavorites() {
+      const card = activeSelectionCards.get(document);
+      if (card !== undefined) selectionCardBindings.get(card)?.refreshFavorite();
+    },
     setAppearance(next) {
       const pending = appearanceWrites.get(document)?.pending;
       // An earlier own-write notification must not replace a newer local click

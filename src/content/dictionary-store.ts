@@ -17,6 +17,21 @@ export interface DictionaryEntry {
 export const DICTIONARY_HISTORY_KEY = 'dictionaryHistory';
 export const DICTIONARY_FAVORITES_KEY = 'dictionaryFavorites';
 export const DICTIONARY_REVIEW_KEY = 'dictionaryReviewState';
+export interface DictionaryReviewRecord { dueAt: number; interval: number }
+export type DictionaryReviewState = Record<string, DictionaryReviewRecord>;
+
+export function parseDictionaryReviewState(stored: unknown): DictionaryReviewState {
+  const state: DictionaryReviewState = Object.create(null);
+  if (isRecord(stored)) {
+    for (const [key, value] of Object.entries(stored)) {
+      if (isRecord(value) && typeof value.dueAt === 'number' && Number.isFinite(value.dueAt) &&
+          typeof value.interval === 'number' && Number.isFinite(value.interval) && value.interval >= 0 && value.interval <= 30) {
+        state[key.trim().toLowerCase()] = { dueAt: value.dueAt, interval: value.interval };
+      }
+    }
+  }
+  return state;
+}
 const MAX_HISTORY_ENTRIES = 50;
 const MAX_FAVORITES = 100;
 
@@ -66,11 +81,13 @@ export function createDictionaryStore(
   recordHistory(entry: DictionaryEntry): Promise<void>;
   listHistory(): Promise<DictionaryEntry[]>;
   toggleFavorite(entry: DictionaryEntry): Promise<boolean>;
+  setFavorite(entry: DictionaryEntry, favorite: boolean): Promise<boolean>;
   isFavorite(query: string): Promise<boolean>;
   listFavorites(): Promise<DictionaryEntry[]>;
   clearHistory(): Promise<void>;
   clearFavorites(): Promise<void>;
   recordReview(query: string, remembered: boolean): Promise<void>;
+  listReview(): Promise<DictionaryReviewState>;
 } {
   async function read(key: string): Promise<DictionaryEntry[]> {
     // A failed read must not turn a subsequent write into a destructive reset.
@@ -110,6 +127,17 @@ export function createDictionaryStore(
     return (await read(DICTIONARY_FAVORITES_KEY)).some((item) => sameQuery(item.query, query));
   }
 
+  async function setFavorite(entry: DictionaryEntry, favorite: boolean): Promise<boolean> {
+    const current = await read(DICTIONARY_FAVORITES_KEY);
+    const existing = current.some((item) => sameQuery(item.query, entry.query));
+    if (existing === favorite) return favorite;
+    const next = favorite
+      ? [{ ...entry, savedAt: now() }, ...current].slice(0, MAX_FAVORITES)
+      : current.filter((item) => !sameQuery(item.query, entry.query));
+    await write(DICTIONARY_FAVORITES_KEY, next);
+    return favorite;
+  }
+
   async function listFavorites(): Promise<DictionaryEntry[]> {
     return read(DICTIONARY_FAVORITES_KEY);
   }
@@ -124,16 +152,7 @@ export function createDictionaryStore(
 
   async function recordReview(query: string, remembered: boolean): Promise<void> {
     const values = await storage.get([DICTIONARY_REVIEW_KEY]);
-    const stored = values[DICTIONARY_REVIEW_KEY];
-    const state: Record<string, { dueAt: number; interval: number }> = Object.create(null);
-    if (isRecord(stored)) {
-      for (const [key, value] of Object.entries(stored)) {
-        if (isRecord(value) && typeof value.dueAt === 'number' && Number.isFinite(value.dueAt) &&
-            typeof value.interval === 'number' && Number.isFinite(value.interval) && value.interval >= 0 && value.interval <= 30) {
-          state[key.trim().toLowerCase()] = { dueAt: value.dueAt, interval: value.interval };
-        }
-      }
-    }
+    const state = parseDictionaryReviewState(values[DICTIONARY_REVIEW_KEY]);
     const key = query.trim().toLowerCase();
     const previous = state[key];
     const interval = remembered ? Math.min(30, Math.max(1, (previous?.interval ?? 0) * 2)) : 1;
@@ -145,10 +164,15 @@ export function createDictionaryStore(
     recordHistory,
     listHistory,
     toggleFavorite,
+    setFavorite,
     isFavorite,
     listFavorites,
     clearHistory,
     clearFavorites,
-    recordReview
+    recordReview,
+    async listReview() {
+      const values = await storage.get([DICTIONARY_REVIEW_KEY]);
+      return parseDictionaryReviewState(values[DICTIONARY_REVIEW_KEY]);
+    }
   };
 }
