@@ -1,80 +1,76 @@
-# CS2 HLTV Chinese Reader
+# CS2 HLTV 中文阅读器
 
-<p align="center">
-  <a href="README.md">English</a> | <a href="README.zh-CN.md">中文</a>
-</p>
+这是一个开源的 Chrome 与 Edge 扩展，用中文帮助阅读 HLTV。已确认的固定界面词条使用内置词典离线翻译；新闻正文、论坛正文、词典查询和其他符合条件的动态文本，使用你自己配置的翻译服务。
 
-An open-source Chrome and Edge extension that makes HLTV easier to read in Chinese. Confirmed interface labels are translated locally from the bundled glossary. News articles, forum prose, dictionary lookups, and other eligible free text use the translation provider configured by you.
+> **重要：** 这是一个“加载已解压的扩展程序”版本，不是 Chrome 应用商店安装包。你需要下载 ZIP、解压，然后在浏览器扩展页面中选择解压后的文件夹。
 
-> **Important:** this is an unpacked developer extension. It is not installed from the Chrome Web Store. Download the ZIP, extract it, and load the extracted folder from the browser's extension page.
+## v1.0.3 更新内容（2026-10-10）
 
-## v1.0.3 changes (2026-10-10)
+v1.0.3 包含以下修正，以及下方列出的 v1.0.2 开发阶段改进。详细安装步骤见下文，更新说明也包含在安装包的 `INSTALL.txt` 中。
 
-v1.0.3 includes the fixes below and the v1.0.2 development-stage improvements listed afterwards. See the detailed installation steps below and the package's `INSTALL.txt` for updating an existing installation.
+- **复习交互：** 答案与原形先隐藏，点击“显示答案”再查看。保存时锁定评分按钮，失败时保留当前词；退出或重新开始后，旧请求不会推进新一轮。复习使用开始时收藏的固定顺序，期间禁用筛选和清空。
+- **完整导出：** “全部”导出历史与收藏的去重合集；“收藏”或复习时导出收藏，避免清空历史后丢掉收藏的导出内容。可能被表格识别为公式的文本会添加文字前缀，CSV 不是自动导入备份。
+- **外观保存：** 每个按钮只保存修改的那一项，避免另一标签页改字号时覆盖主题或颜色。保存失败会提示，当前卡片仍保留预览。
+- **系统发音：** 优先选择已安装的对应口音；缺少该口音时明确提示使用其他英语语音。播放失败、没有可用语音时显示提示，关闭卡片或返回新结果会停止旧卡片的播放。
+- **设置页保护：** 无法读取最新设置时停止保存，避免旧草稿覆盖其他页面的修改；授权后的权限状态标记保存失败会显示提示。
 
-- **Review interactions:** answers and lemmas are hidden until revealed. Rating buttons lock while saving; failed saves keep the current word. Old responses cannot advance a restarted session. Each session uses a fixed snapshot of favorites, with filters and clearing disabled during review.
-- **Complete export:** All exports a deduplicated union of history and favorites. Favorites/review exports favorites, including entries no longer in history. Formula-like spreadsheet text receives a text prefix; CSV is not an automatically importable backup.
-- **Appearance saving:** controls persist only the changed field, so a font update cannot overwrite a different tab's theme/color. Failures show feedback while retaining the current preview.
-- **System pronunciation:** prefer an installed voice for the requested accent; explicitly report accent fallback, missing voices and playback failures. Closing a card or rendering a new result stops its previous playback.
-- **Settings protection:** stop saving if the latest settings cannot be read, preventing a stale draft from replacing changes elsewhere. Permission-revision write failures now produce feedback.
+以下为 v1.0.2 开发阶段的改进，已包含在本版中：
 
-The following v1.0.2 development-stage improvements are included as well:
+- **官方核对入口：** 单词卡片增加牛津官方查词和 Oxford 3000/5000 词表链接，模型请求失败时也能打开核对。没有接入牛津 API、官方词库或录音；等级显示为“CEFR 参考等级（模型）”，发音按钮标明系统语音。
+- **释义拆分：** 同一词性内的分号保留在该词性释义中，英文解释里的分号也不再把后半句拆到“补充”。
+- **原形准确性：** 服务商没有返回原形时，不再通过删掉 `ed` 来猜测。未知原形不显示；旧历史保留，可重新查词并核对。
+- **记录保存：** 历史、收藏的读写和清空统一通过后台排队，避免不同标签页覆盖整个列表。收藏保存期间锁定按钮；失败时显示提示。历史页随记录变化刷新。
+- **连续查词：** 请求返回时保留后来编辑但未提交的文字、光标与输入焦点，提示下方结果对应的原查询。
+- **外观同步：** 已打开的卡片订阅系统深浅色变化，并同步其他标签页修改的卡片颜色、字号和主题。
 
-- **Official verification links:** dictionary cards link to the Oxford dictionary and Oxford 3000/5000 lists, including when model translation fails. No Oxford API, official dataset, or recording is integrated. Levels are labelled as model CEFR references; pronunciation buttons identify system speech.
-- **Definition parsing:** semicolons within one part of speech or an English explanation remain in that field instead of spilling into supplementary text.
-- **Base forms:** an omitted lemma is no longer guessed by stripping `ed`. Unknown bases are hidden; existing history is preserved and can be looked up again for verification.
-- **Record storage:** history/favorites reads, writes, and clears go through one background queue. Favorite buttons lock during saving and report errors. The history page refreshes on record changes.
-- **Continuous lookup:** responses retain later unsubmitted edits, caret, and input focus, with a notice identifying the query associated with the displayed result.
-- **Appearance:** open cards subscribe to system color changes and synchronize card theme, color, and font settings changed in another tab.
+来源和授权边界见 [牛津数据说明](docs/oxford-data.md)。浏览器实际操作效果仍待重新加载后的验证，不宣称全站中文覆盖或官方数据接入完成。
 
-See [Oxford data and licensing notes](docs/oxford-data.md). Actual browser operation remains pending verification after reload; this is not a claim of official-data integration or exhaustive Chinese coverage.
+## v1.0.1 更新内容（2026-10-09）
 
-## v1.0.1 changes (2026-10-09)
+本次更新保存目前的中文阅读与查词体验。相较于 v1.0.0，主要变化如下：
 
-This update saves the current Chinese reading and dictionary experience. Compared with v1.0.0:
+- **目标用户**：希望用中文阅读 HLTV 的中文使用者。
+- **词典信息与排版**：词性使用 `n.`、`v.`、`adj.`、`adv.` 等简写；动词原形放到卡片底部，仅在原形与查询词不同的时候显示。支持展示服务商返回的 CEFR 难度、例句和简明英文解释。
+- **更清晰的卡片设置**：字号、浅色/深色/跟随系统和卡片颜色集中在齿轮按钮中。新增中性、蓝、绿、沙色、玫瑰五种颜色；修正深色模式下颜色按钮的文字对比度。
+- **卡片设置独立关闭**：设置面板右上角的 × 只关闭设置，保留词典卡片；卡片右上角的 × 关闭整张卡片。
+- **统一按钮与选词入口**：设置、搜索、关闭按钮统一尺寸和线条粗细；选区旁的放大镜使用半透明毛玻璃效果。收藏按钮移到音标行的右侧。
+- **查询时卡片保持显示**：点击搜索或按 Enter 后显示“正在查询”，在原卡片内更新结果，保留调整过的大小和位置；不再 12 秒后自动关闭。较早的查询不会覆盖较新的查询，手动关闭后不会因请求返回而重新弹出。
+- **历史、收藏与复习**：独立历史页增加生词复习和 CSV 导出，词条可以保存难度、例句等信息。
+- **翻译风格**：设置页增加“自然中文”和“直译”选择，用于一般页面文本翻译。
 
-- **Target audience:** Chinese-speaking users who want to read HLTV in Chinese.
-- **Dictionary layout:** parts of speech use abbreviations such as `n.`, `v.`, `adj.`, and `adv.`. A different verb base form appears at the bottom. Cards can display provider-returned CEFR levels, examples, and concise English definitions.
-- **Card settings:** font size, system/light/dark appearance, and five card colors are grouped behind the gear button. Color-choice text remains readable in dark mode.
-- **Separate settings close button:** the settings panel's × closes that panel; the header's × closes the entire dictionary card.
-- **Consistent controls:** settings, search, and close share button and icon sizes and stroke weight. The selection magnifier has a translucent frosted-glass appearance. Favorites sit at the right of the pronunciation row.
-- **Search without dismissing the card:** search and Enter show a loading message and update the same card, preserving its size and position. The 12-second automatic dismissal is removed. Superseded responses are ignored, and a closed card is not reopened by its pending request.
-- **History and study tools:** the dedicated history page adds favorites review and CSV export; entries can retain levels and examples.
-- **Translation style:** options offer natural Chinese or a more literal style for ordinary page text.
+单词与整句查询继续支持在页面翻译关闭时使用；备用服务、离线缓存、完全中文和双语对照模式继续保留。v1.0.1 未包含上方列出的 v1.0.3 修正。
 
-Word and sentence lookup continue to work when page translation is off. Fallback providers, cached translations, and full-Chinese/bilingual modes remain available. v1.0.1 did not include the v1.0.3 fixes listed above.
+## 功能
 
-## What it provides
+- 支持完全中文和中英对照两种页面模式。
+- 专注中文用户的阅读流程：完全中文页面翻译、英文查词和中英对照显示。
+- 弹窗、设置页和历史页固定使用中文界面，面向中文母语用户。
+- 导航、筛选器、统计数据和固定界面词条支持离线翻译。
+- 支持 DeepSeek、OpenAI 和自定义 OpenAI 兼容翻译服务，用于新闻、整句和其他自由文本。
+- 支持备用翻译服务和 IndexedDB 离线缓存。
+- 选中单词后显示学习词典卡片：中文释义、简明英文解释、词性、动词原形、英美音标、系统发音按钮、CEFR 模型参考等级（如 B1）、例句、编辑查询、收藏和调整大小。
+- 选中句子或短语后显示整句中文翻译；即使页面翻译关闭，选词功能仍然可用。
+- 历史记录与收藏使用独立页面管理，支持生词复习和 CSV 导出。
+- 翻译卡片内可直接切换浅色、深色、跟随系统主题并调整字号。
+- 使用自定义扩展图标和 Chrome/Edge Manifest V3 Service Worker。
 
-- Full-Chinese mode and bilingual mode for supported HLTV pages.
-- Chinese-reader workflow focused on Chinese page translation, English word lookup, and bilingual/full-Chinese display.
-- The popup, settings page, and history page use a Chinese-only interface for Chinese-native HLTV readers.
-- Offline glossary translation for confirmed navigation, filters, statistics, and fixed labels.
-- Article, sentence, and free-text translation through DeepSeek, OpenAI, or a custom OpenAI-compatible provider.
-- Optional fallback provider and IndexedDB translation cache for network failures.
-- Select a word to open a learner dictionary card with Chinese meanings, concise English explanations, parts of speech, verb base forms, UK/US IPA, system pronunciation buttons, model CEFR references such as B1, examples, editable lookup text, favorites, and resizing.
-- Select a sentence or phrase to show a Chinese sentence translation, even when page translation is disabled.
-- Separate dictionary history and favorites page with review mode and CSV export.
-- Card-level light, dark, system theme, and font-size controls.
-- Custom extension icon and Chrome/Edge Manifest V3 service worker.
+## 支持范围与限制
 
-## Supported browsers and limits
+- 支持桌面版 Chrome 和 Microsoft Edge。
+- 当前内容脚本匹配 `https://www.hltv.org/*`。
+- 本版本暂不支持 Firefox。Safari、手机浏览器和通用网页翻译也不在目标范围内。
+- 固定界面词条可以离线翻译；新闻标题、新闻正文、词典结果和整句翻译需要配置翻译服务、API Key、服务商域名权限以及网络连接。
 
-- Chrome and Microsoft Edge desktop are supported.
-- The current content script matches `https://www.hltv.org/*`.
-- Firefox is not part of this release. Safari, mobile browsers, and general-purpose web translation are not targets.
-- Fixed interface labels can work offline. News titles, article paragraphs, dictionary results, and sentence translations need a configured provider, an API key, permission for that provider's origin, and network access.
+## 详细安装步骤
 
-## Detailed installation steps
+Chrome 和 Edge 任选其一安装。安装包需要先解压，浏览器加载的是文件夹，不能直接加载 ZIP。下面以 Windows 为例。
 
-Choose either Chrome or Edge. Extract the package before loading it: the browser needs a folder, not the ZIP file. The following instructions use Windows.
+### 1. 下载并解压安装包
 
-### 1. Download and extract the package
-
-1. Open the [v1.0.3 release page](https://github.com/Chester-chs/cs2-hltv-zh-reader/releases/tag/v1.0.3).
-2. Expand **Assets** and download **`CS2-HLTV-Chinese-Reader-v1.0.3.zip`**. GitHub's **Source code** archives and **Code → Download ZIP** are source files, not the installable extension package.
-3. Find the downloaded ZIP in File Explorer, usually under Downloads. Right-click it, select **Extract All**, choose a permanent location such as `C:\Users\YourName\Documents\HLTV-Chinese-Reader`, and click **Extract**. Simply opening the ZIP preview does not extract it.
-4. Open the extracted folder and check that **`manifest.json` is directly inside it**. The correct layout is:
+1. 打开 [v1.0.3 发布页面](https://github.com/Chester-chs/CS2-HLTV-Chinese-Reader/releases/tag/v1.0.3)。
+2. 展开页面下方的 **Assets（资源）**，点击 **`CS2-HLTV-Chinese-Reader-v1.0.3.zip`** 下载。不要下载 GitHub 自动生成的 Source code ZIP，也不要对仓库点 Code → Download ZIP 来代替安装包。
+3. 在文件资源管理器中找到下载的 ZIP（通常位于“下载”文件夹），右键选择 **全部解压**，指定一个不会随意删除的位置，例如 `C:\Users\你的用户名\Documents\HLTV-Chinese-Reader`，再点击 **解压**。不要只双击 ZIP 后停留在压缩包预览中。
+4. 打开解压后的文件夹，确认 **`manifest.json` 直接位于这个文件夹的最外层**。正确结构类似：
 
    ```text
    HLTV-Chinese-Reader\
@@ -88,124 +84,124 @@ Choose either Chrome or Edge. Extract the package before loading it: the browser
    └─ icons\\
    ```
 
-   If `manifest.json` is inside another nested folder, select that inner folder in the next step. Do not select the ZIP file itself.
+   如果 `manifest.json` 还藏在下一层文件夹里，下一步请选择那个内层文件夹。不能直接选择 ZIP 文件。
 
-### 2. Load it in Chrome
+### 2. 在 Chrome 中安装
 
-1. In Chrome's address bar, open **`chrome://extensions`**.
-2. Turn on **Developer mode** in the upper-right corner.
-3. Click **Load unpacked**.
-4. Navigate to the extracted folder whose top level contains `manifest.json`, then click **Select Folder**. This dialog selects folders and may hide ZIPs and individual files; that is expected. You can paste the extracted folder's full path into its address bar, press Enter, and then select the folder.
-5. Confirm that **CS2 HLTV Chinese Reader** appears in the extension list and that its switch is enabled.
-6. Optional: click the puzzle-piece button in the toolbar and pin the extension so its icon is always visible.
+1. 在 Chrome 地址栏打开 **`chrome://extensions`**。
+2. 打开右上角的 **开发者模式（Developer mode）**。
+3. 点击 **加载已解压的扩展程序（Load unpacked）**。
+4. 在文件夹选择窗口找到刚才的解压位置，选择里面直接有 `manifest.json` 的文件夹，再点击 **选择文件夹**。这个窗口用于选择文件夹，可能不显示 ZIP 或里面的文件，这是正常现象。也可以将解压文件夹的完整路径粘贴到窗口顶部地址栏，按 Enter 后再点击 **选择文件夹**。
+5. 在扩展列表中确认出现 **CS2 HLTV Chinese Reader**，并确认开关已打开。
+6. 可选：点击浏览器工具栏的拼图图标，把扩展固定到工具栏，方便以后打开。
 
-### 3. Load it in Microsoft Edge
+### 3. 在 Microsoft Edge 中安装
 
-1. In Edge's address bar, open **`edge://extensions`**.
-2. Turn on **Developer mode**.
-3. Click **Load unpacked** and select the extracted folder containing `manifest.json`.
-4. Enable the extension. Pin it from the Extensions button if you want quick access.
+1. 在 Edge 地址栏打开 **`edge://extensions`**。
+2. 打开 **开发人员模式（Developer mode）**。
+3. 点击 **加载解压缩（Load unpacked）**，选择里面直接有 `manifest.json` 的解压文件夹。
+4. 打开扩展开关。需要快速使用时，可以在扩展菜单中将它固定到工具栏。
 
-### 4. Configure a translation provider
+### 4. 配置翻译服务
 
-The extension can translate confirmed fixed labels without an API key. To translate news prose, sentences, and dictionary results, complete this setup:
+扩展自带的固定界面词条不需要 API Key 就能翻译。新闻正文、整句翻译和词典结果需要完成下面的配置：
 
-Create an API key with your chosen provider and confirm access to the selected model. Installing the extension does not supply a key or API credits.
+先在你选择的服务商平台创建 API Key，并确认该账号可以调用所选模型。安装本扩展不会自动提供 API Key 或调用额度。
 
-1. Open an HLTV page, click the extension icon, and choose **服务商与首次设置**. You can also open the extension's **Details** page and choose **Extension options**.
-   - The settings page uses a Chinese interface.
-2. In **Provider preset**, choose **DeepSeek**, **OpenAI**, or **Custom**.
-   - DeepSeek preset: `https://api.deepseek.com`, model `deepseek-chat`.
-   - OpenAI preset: `https://api.openai.com`, model `gpt-4o-mini`.
-   - Custom: enter your provider's HTTPS base URL and model name. The extension appends `/v1/chat/completions`; enter the base URL, not the complete chat-completions URL.
-3. Paste your own API key into **API Key**. Never send the key to anyone in a chat or issue report.
-   - **翻译风格** selects natural Chinese (**自然中文**) or a literal style (**直译**) for ordinary page text.
-4. Leave **Use JSON output mode** enabled unless your provider explicitly rejects `response_format`. If it rejects it, turn this option off and test again.
-5. Click **Authorize** in the provider permission section and approve the browser permission prompt. The permission is for the provider origin you entered, not for all websites.
-6. Click **Save**.
-7. Click **Test connection** and wait for **Connection succeeded**. Fix the address, key, model, or permission if the test fails.
-8. If you enabled a fallback provider, fill in its base URL, model, and key. Save it and authorize its origin as well.
+1. 打开一个 HLTV 页面，点击扩展图标，选择 **服务商与首次设置**。也可以在扩展管理页点击本扩展的 **详细信息**，再选择 **扩展程序选项**。
+   - 设置页使用中文界面。
+2. 在 **服务商预设** 中选择 **DeepSeek**、**OpenAI** 或 **自定义**。
+   - DeepSeek 预设：`https://api.deepseek.com`，模型名 `deepseek-chat`。
+   - OpenAI 预设：`https://api.openai.com`，模型名 `gpt-4o-mini`。
+   - 自定义：填写服务商的 HTTPS baseURL 和模型名。扩展会自动请求 `/v1/chat/completions`，所以填写 baseURL，不要把完整的 chat-completions 地址再次粘进去。
+3. 将你自己的 API Key 粘贴到 **API Key** 输入框。不要把 Key 发到聊天、截图或公开 Issue 中。
+   - **翻译风格**可选“自然中文”或“直译”。希望阅读更流畅时选择自然中文；希望贴近原句结构时选择直译。
+4. 默认勾选 **使用 JSON 输出模式（推荐）**。只有当服务商明确不支持 `response_format` 并报错时，才取消勾选后重试。
+5. 在 **服务商域名权限** 区域点击 **授权**，并在浏览器弹窗中允许访问该服务商域名。这个权限只针对你填写的服务商域名，不是所有网站。
+6. 点击 **保存**。
+7. 点击 **测试连接**，看到 **连接成功** 后再使用。如果失败，请检查地址、Key、模型名和授权状态。
+8. 如果启用了 **备用翻译服务**，还要填写备用服务商的 baseURL、模型名和 API Key，并为备用域名授权。
 
-### 5. Turn on HLTV translation
+### 5. 开启 HLTV 翻译
 
-1. Return to an `https://www.hltv.org/` tab and refresh the page after changing settings.
-2. Click the extension icon.
-3. Turn on **启用页面翻译** (enable page translation).
-4. Choose **完全中文** (full Chinese) to replace eligible English labels, or **双语对照** (bilingual) to keep the original and show Chinese beside it.
-5. Open another HLTV page or refresh the current page if some content was already rendered before the extension was enabled.
+1. 回到 `https://www.hltv.org/` 页面。修改设置后，刷新已经打开的 HLTV 标签页。
+2. 点击浏览器工具栏中的扩展图标。
+3. 打开 **启用页面翻译**。
+4. 选择 **完全中文**：用中文替换符合条件的英文；选择 **双语对照**：保留原文并在旁边显示中文。
+5. 如果页面在开启扩展前已经打开，建议再刷新一次，或打开一个新的 HLTV 页面。
 
-The extension does not translate team names, player names, scores, dates, live-score widgets, or other data that should remain exact. News prose and other dynamic text are translated only after the provider setup succeeds.
+### 首次使用：直接配置中文翻译
 
-### First-use setup
+- 弹窗和设置页使用中文界面。
+- 中文用户可以使用完全中文页面翻译、英文查词、中文释义、CEFR 模型参考等级和中英对照显示；不会提供中文反向查词。
 
-- The popup and settings page open directly in Chinese for Chinese-native readers.
-- The workflow keeps English word lookup, Chinese meanings, model CEFR references, and Chinese page translation. Chinese reverse lookup is not offered.
+队名、选手名、比分、日期、实时比分组件以及其他必须保持精确的数据不会被随意翻译。新闻正文和其他动态文本，只有在翻译服务配置成功后才会翻译。
 
-## Word lookup, sentence translation, history, and favorites
+## 单词查询、整句翻译、历史记录与收藏
 
-- Drag over a word. A small magnifier appears beside the selection; click it to open the dictionary card.
-- Drag over a sentence or phrase to request a sentence translation. This works even if page translation is switched off.
-- The card can show Chinese meanings, a short English explanation, parts of speech, a verb base form, UK/US IPA, and pronunciation buttons. The lookup text can be edited before searching again.
-- Provider-returned levels can be A1, A2, B1, B2, C1, C2, or unknown. These are generated by the translation model and are not checked against an official Oxford word list.
-- Use the star button to save a word. Use **打开词典历史** (open dictionary history) in the popup to open the dedicated history and favorites page.
-- The history page includes **开始复习** (start review) for saved words and **导出 CSV** (export CSV) for Excel, Anki, or other study tools.
-- Open the **gear** to adjust font size, theme, and card color. Its panel's × closes settings; the header's × closes the card.
-- Edit the query, click **search**, or press **Enter**. The card stays visible while the request runs and updates when the result arrives.
-- Drag the card's lower-right corner to resize it. Text and controls scale with its width.
-- History keeps at most 50 distinct queries and favorites at most 100 entries. Older entries are removed beyond these limits; export CSV for longer-term retention.
-- UK/US pronunciation uses browser system speech, not Oxford dictionary recordings. Available voices depend on the device.
+- 用鼠标选中一个单词后，选区旁边会出现小放大镜；点击放大镜即可打开词典卡片。
+- 选中一个句子或短语后，会请求整句中文翻译。即使关闭页面翻译，选词功能仍可使用。
+- 卡片可以显示中文释义、简短英文解释、词性、动词原形、英式/美式音标和发音按钮；也可以先修改查询文字再重新搜索。
+- 如果服务商返回难度，卡片会显示 A1、A2、B1、B2、C1、C2 或“未知”。这些值来自翻译模型，没有接入牛津官方词表进行核验，不能视作官方等级。
+- 点击星标可以收藏单词；在弹窗中点击 **打开词典历史**，进入独立的历史记录与收藏页面。
+- 历史页可以点击 **开始复习** 逐个复习收藏词条，也可以点击 **导出 CSV** 保存到 Excel、Anki 或其他学习工具。
+- 点击卡片右上角的 **齿轮**，可以调整字号、明暗模式和卡片颜色。设置面板的 × 收起设置；卡片标题行的 × 关闭卡片。
+- 输入框支持直接修改单词或句子，点击 **搜索** 或按 **Enter** 查询。等待期间卡片保持显示，返回后原地更新结果。
+- 可以拖动卡片右下角调整大小，卡片中的文字与按钮会随宽度缩放。
+- 历史最多保留 50 个不同查询，收藏最多保留 100 项，超过上限会移除最旧的记录。需要长期保存时，请导出 CSV。
+- 英美发音按钮使用浏览器的系统语音，具体声音取决于设备已安装的语音，不是牛津词典录音。
 
-## Updating an existing installation
+## 更新已有安装
 
-1. Download the new installation ZIP and extract it to a temporary folder. Confirm that `manifest.json` is directly inside it.
-2. Copy all new files and subfolders into the original folder your browser currently loads, replacing matching files. Keeping the same installation path normally preserves settings, history, and favorites.
-3. Open `chrome://extensions` or `edge://extensions`, find **CS2 HLTV Chinese Reader**, and click its circular-arrow **Reload** button after file replacement finishes.
-4. Confirm version **1.0.3**, then refresh every open HLTV tab. Refreshing a website alone does not reload extension code.
-5. Open the popup and check the Chinese interface and display mode. If news translation fails, check permissions and run **测试连接** (test connection).
+1. 下载新版安装 ZIP，先解压到一个临时文件夹，确认里面直接有 `manifest.json`。
+2. 打开浏览器正在加载的原安装文件夹。将新版文件夹里的全部文件与子文件夹复制进去，遇到同名文件时选择 **替换**。保留原安装路径，通常可以继续使用原来的设置、历史和收藏。
+3. 打开 `chrome://extensions` 或 `edge://extensions`，找到 **CS2 HLTV Chinese Reader**，点击卡片上的圆形箭头 **重新加载**。文件替换完成之前不要点击它。
+4. 确认扩展版本显示为 **1.0.3**，再刷新所有已经打开的 HLTV 标签页；只刷新网页不会重新加载扩展代码。
+5. 打开弹窗，确认中文界面和显示模式正常；若新闻翻译失败，再到设置页检查权限并点击 **测试连接**。
 
-Changing the installation path can give an unpacked extension a different identity, so settings, history, and favorites may not migrate automatically. Export CSV and retain your provider configuration before changing paths or removing the extension. CSV is not a full settings backup, and automatic import is not implemented.
+如果确实需要更换安装路径，可以用“加载已解压”选择新的文件夹，但新路径可能生成新的扩展身份，旧设置、历史和收藏可能不会自动迁移。更换路径或移除扩展前先导出 CSV，并自行保存服务商配置；CSV 导出不是完整设置备份，也没有自动导入功能。
 
-Keep the extracted folder. The browser loads the extension from that folder; deleting it makes the extension unavailable. Browser storage normally keeps settings for the same unpacked extension, but keep your provider address, model, and API key available in case the browser asks you to configure it again.
+不要删除浏览器正在加载的解压文件夹，否则扩展会无法运行。同一个解压扩展通常会保留浏览器本地设置，但仍建议记住自己的服务商地址、模型名和 API Key，以便浏览器要求重新设置时使用。
 
-## Troubleshooting
+## 常见问题
 
-### “`background.scripts` requires manifest version of 2 or lower”
+### 出现“`background.scripts` requires manifest version of 2 or lower”
 
-You loaded an old package. Remove that copy and download the current release again. The current Manifest V3 package uses `background.service_worker` and does not contain `background.scripts`.
+这表示加载了旧安装包。移除旧副本，重新下载当前发布版本。当前 Manifest V3 安装包只使用 `background.service_worker`，没有 `background.scripts`。
 
-### “Cannot create item with duplicate id …”
+### 出现“Cannot create item with duplicate id …”
 
-That message comes from an old build that registered browser context-menu items more than once. Remove the old unpacked copy, load only the current extracted folder, and click **Reload**. The current release does not register those old context-menu IDs.
+这是旧版本重复注册浏览器右键菜单留下的错误。移除旧的解压副本，只加载当前版本的文件夹，然后点击 **重新加载**。当前版本已经不再注册这些旧的右键菜单 ID。
 
-### The page is still partly English
+### 页面仍然有英文
 
-Refresh the HLTV tab after enabling the extension. Confirm that the popup says **Translation enabled**, then check that the provider permission is **Granted** and **Test connection** succeeds. Fixed labels use the bundled glossary; changing news articles and other free text requires a working provider.
+开启扩展后刷新 HLTV 标签页，确认弹窗显示 **翻译已开启**。然后在设置页确认服务商权限为 **已授权**，并确认 **测试连接** 成功。固定词条来自内置词典；新闻标题、正文等自由文本仍需要可用的翻译服务。
 
-### “Translation service request failed” or “No Chinese translation found”
+### 出现“翻译服务请求失败”或“未找到中文翻译”
 
-Open the options page and check the base URL, model, API key, network connection, and provider-origin permission. For a custom provider, use HTTPS (HTTP is accepted only for `localhost`, `127.0.0.1`, or `[::1]`) and enter a base URL rather than a full `/chat/completions` URL.
+打开设置页检查 baseURL、模型名、API Key、网络连接和服务商域名权限。自定义服务商必须使用 HTTPS；HTTP 只允许 `localhost`、`127.0.0.1` 或 `[::1]`。填写 baseURL，不要填写完整的 `/chat/completions` 地址。
 
-### “Load unpacked” rejects the folder
+### 点击“加载已解压”后提示无效
 
-Select the folder containing `manifest.json` directly. Do not select the downloaded ZIP, the GitHub repository root, or a parent folder that contains the real extension folder.
+请选择里面直接有 `manifest.json` 的文件夹。不要选择下载的 ZIP、GitHub 仓库根目录，或包含真正扩展文件夹的上级目录。
 
-### The extension icon or popup is missing
+### 找不到扩展图标或弹窗
 
-Open the browser's extensions page and check that the extension is enabled. Pin it from the Extensions menu. If the browser reports an error, open the extension's **Errors** panel and reload the current release folder after removing older copies.
+打开浏览器扩展管理页，确认扩展开关已打开；再从扩展菜单中将它固定到工具栏。如果浏览器显示错误，打开扩展卡片的 **错误** 面板，移除旧副本后重新加载当前文件夹。
 
-## Known limitations
+## 已知限制
 
-- Meanings, IPA, lemmas and CEFR references come from a model, not official Oxford data. Official links are provided for user verification.
-- System voices and accents depend on installed device voices; these are not Oxford recordings.
-- Existing history and cache are retained and may contain incorrect provider responses; look up words again and verify when needed.
-- The changes received source review, type checking and build checks; complete real-browser interaction verification remains outstanding.
-- Coverage depends on HLTV's page structure, and some pages may remain partly English. Offline cache reuse only covers previously cached content, not arbitrary new text.
+- 释义、音标、原形和 CEFR 等级由模型提供，未接入牛津官方数据；官方入口用于用户自行核对。
+- 系统发音的声音和口音取决于设备可用语音，不是牛津录音。
+- 旧历史与缓存保留，原始服务商响应仍可能有错误；必要时重新查询并核对。
+- 上述修正经过代码审查、类型检查和构建检查；真实浏览器中的完整操作验证仍未完成。
+- 网页覆盖依赖 HLTV 的页面结构，部分页面仍可能保留英文；缓存只能用于已缓存的内容，不等于离线翻译任意新内容。
 
-## Provider and privacy
+## 服务商与隐私
 
-The API key is stored in `browser.storage.local` on this device. It is sent only to the provider you configure and is not synchronized with a browser account or sent to the extension developer. Provider responses may contain the text you selected or the article text requested for translation; review your provider's privacy policy before use. The local glossary and IndexedDB translation cache remain on the device.
+API Key 保存在本机浏览器的 `browser.storage.local` 中，只会发送给你配置的服务商，不会同步到浏览器账号，也不会发送给扩展开发者。翻译请求可能包含你选中的文字或请求翻译的新闻正文，使用前请查看服务商自己的隐私政策。本地词典和 IndexedDB 翻译缓存保留在本机。
 
-## Development
+## 开发
 
 ```bash
 npm install
@@ -214,8 +210,8 @@ npm run typecheck
 npm run build
 ```
 
-The build produces a single MV3 background service worker, a single content bundle, the options and popup pages, the dedicated history page, the packaged glossary, and the extension icons.
+构建结果包含单一 MV3 后台 Service Worker、单一内容脚本、设置页、工具栏弹窗、独立历史页、内置词典和扩展图标。
 
-## Scope and disclaimer
+## 范围与声明
 
-This project is not affiliated with, endorsed by, sponsored by, or otherwise associated with HLTV or hltv.org. The extension depends on HLTV's page structure and may need maintenance when the site changes.
+本项目与 HLTV 或 hltv.org 没有任何隶属、认可、赞助或其他关联关系。扩展依赖 HLTV 的页面结构，网站改版后可能需要维护。

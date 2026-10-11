@@ -797,3 +797,10 @@ This is the package-preparation checkpoint before commit/release execution. It d
 
 - The owner confirmed the exact 19-file source list and v1.0.3 commit/push/release, then paused and explicitly resumed execution. The pre-publication observations above are historical checkpoints, not a claim about the current remote state.
 - Publication receipts are saved locally to ignored `raw-capture/publication-v1.0.3.txt`. For subsequent sessions, determine the current committed/released state using real `git log`, `git ls-remote origin`, and `gh release view v1.0.3 --repo Chester-chs/cs2-hltv-zh-reader`; this source document cannot contain its own final commit hash.
+
+## Chinese-only repository README (2026-10-11)
+
+- Owner requested that the GitHub README retain only Chinese. README.md now contains the full Chinese documentation, including release notes, features, detailed installation, updating, troubleshooting and privacy. Removed the language switch and the duplicate README.zh-CN.md file; technical identifiers and interface labels remain where useful for installation.
+- Updated the release link in README.md to the canonical repository name Chester-chs/CS2-HLTV-Chinese-Reader. Previously published release assets are historical artifacts and were not replaced by this documentation-only change.
+- Verified real git log before editing: cb59fa2 (v1.0.3 release), 4e41493 (v1.0.1), 8bd53d6. Whitespace and README-reference checks are recorded during preparation; extension code and version are unchanged. No build or software tests are needed for this documentation change.
+- This section records the documentation preparation checkpoint. Determine later publication state from actual git log and remote main; publication receipts will be saved under ignored raw-capture/publication-readme-zh-2026-10-11.txt.
